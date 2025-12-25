@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Змейка</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 500px;
+            padding: 10px;
+        }
+
+        .header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 15px;
+        }
+
+        .score-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .score-label {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-bottom: 2px;
+        }
+
+        .score-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--tg-theme-button-color, #3390ec);
+        }
+
+        #gameCanvas {
+            border: 2px solid var(--tg-theme-button-color, #3390ec);
+            border-radius: 10px;
+            background: var(--tg-theme-secondary-bg-color, #f9f9f9);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 100%;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 250px;
+        }
+
+        .control-btn {
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 12px;
+            padding: 20px;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.3;
+        }
+
+        .control-btn.empty {
+            background: transparent;
+        }
+
+        #restartBtn {
+            margin-top: 15px;
+            padding: 15px 40px;
+            font-size: 18px;
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            display: none;
+        }
+
+        #restartBtn:active {
+            transform: scale(0.95);
+        }
+
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .game-over-content {
+            background: var(--tg-theme-bg-color, #ffffff);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .game-over-title {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--tg-theme-button-color, #3390ec);
+        }
+
+        .game-over-score {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .new-record {
+            color: #ff6b6b;
+            font-weight: bold;
+            margin-top: 10px;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pause-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+
+        .pause-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <div class="score-box">
+                <div class="score-label">Счёт</div>
+                <div class="score-value" id="currentScore">0</div>
+            </div>
+            <div class="score-box">
+                <div class="score-label">Рекорд</div>
+                <div class="score-value" id="bestScore">0</div>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+        <div class="controls">
+            <div class="control-btn empty"></div>
+            <button class="control-btn" id="upBtn">▲</button>
+            <div class="control-btn empty"></div>
+            <button class="control-btn" id="leftBtn">◄</button>
+            <button class="control-btn" id="downBtn">▼</button>
+            <button class="control-btn" id="rightBtn">►</button>
+        </div>
+
+        <button id="restartBtn">Играть снова</button>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <div class="game-over-content">
+            <div class="game-over-title">Игра окончена!</div>
+            <div class="game-over-score">
+                Ваш счёт: <span id="finalScore">0</span>
+            </div>
+            <div id="newRecord" class="new-record" style="display: none;">
+                🎉 Новый рекорд! 🎉
+            </div>
+            <button class="control-btn" onclick="restartGame()" style="margin-top: 20px; width: 100%;">
+                Играть снова
+            </button>
+        </div>
+    </div>
+
+    <div class="pause-overlay" id="pauseOverlay">
+        <div class="pause-text">ПАУЗА</div>
+    </div>
+
+    <script>
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Настройки игры
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+
+        let snake = [{x: 10, y: 10}];
+        let food = {x: 15, y: 15};
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let bestScore = 0;
+        let gameLoop;
+        let gameSpeed = 150;
+        let isPaused = false;
+        let gameStarted = false;
+
+        // Загрузка рекорда из Cloud Storage
+        if (tg.CloudStorage) {
+            tg.CloudStorage.getItem('bestScore', (error, value) => {
+                if (!error && value) {
+                    bestScore = parseInt(value);
+                    document.getElementById('bestScore').textContent = bestScore;
+                }
+            });
+        }
+
+        // Цвета из темы Telegram
+        const snakeColor = tg.themeParams.button_color || '#3390ec';
+        const foodColor = '#ff6b6b';
+        const bgColor = tg.themeParams.secondary_bg_color || '#f9f9f9';
+
+        // Отрисовка игры
+        function draw() {
+            // Фон
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Змейка
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? snakeColor : adjustColor(snakeColor, -20);
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+                ctx.strokeStyle = bgColor;
+                ctx.strokeRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+            });
+
+            // Еда
+            ctx.fillStyle = foodColor;
+            ctx.beginPath();
+            ctx.arc(
+                food.x * gridSize + gridSize / 2,
+                food.y * gridSize + gridSize / 2,
+                gridSize / 2 - 2,
+                0,
+                2 * Math.PI
+            );
+            ctx.fill();
+        }
+
+        // Обновление игры
+        function update() {
+            if (isPaused || !gameStarted) return;
+
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+
+            // Проверка столкновений со стенами
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                endGame();
+                return;
+            }
+
+            // Проверка столкновений с собой
+            if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+                endGame();
+                return;
+            }
+
+            snake.unshift(head);
+
+            // Проверка съедания еды
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                document.getElementById('currentScore').textContent = score;
+                generateFood();
+                
+                // Вибрация при съедании еды
+                if (tg.HapticFeedback) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                }
+
+                // Увеличение скорости
+                if (score % 5 === 0 && gameSpeed > 50) {
+                    gameSpeed -= 10;
+                    clearInterval(gameLoop);
+                    gameLoop = setInterval(gameStep, gameSpeed);
+                }
+            } else {
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        // Генерация еды
+        function generateFood() {
+            do {
+                food = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+            } while (snake.some(segment => segment.x === food.x && segment.y === food.y));
+        }
+
+        // Шаг игры
+        function gameStep() {
+            update();
+        }
+
+        // Завершение игры
+        function endGame() {
+            clearInterval(gameLoop);
+            gameStarted = false;
+
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred('error');
+            }
+
+            document.getElementById('finalScore').textContent = score;
+            
+            // Проверка рекорда
+            if (score > bestScore) {
+                bestScore = score;
+                document.getElementById('bestScore').textContent = bestScore;
+                document.getElementById('newRecord').style.display = 'block';
+                
+                // Сохранение рекорда
+                if (tg.CloudStorage) {
+                    tg.CloudStorage.setItem('bestScore', bestScore.toString());
+                }
+            } else {
+                document.getElementById('newRecord').style.display = 'none';
+            }
+
+            document.getElementById('gameOver').style.display = 'flex';
+        }
+
+        // Перезапуск игры
+        function restartGame() {
+            snake = [{x: 10, y: 10}];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            gameSpeed = 150;
+            gameStarted = false;
+            isPaused = false;
+            
+            document.getElementById('currentScore').textContent = '0';
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('pauseOverlay').style.display = 'none';
+            
+            generateFood();
+            draw();
+        }
+
+        // Управление
+        function changeDirection(newDx, newDy) {
+            // Запуск игры при первом нажатии
+            if (!gameStarted && (newDx !== 0 || newDy !== 0)) {
+                gameStarted = true;
+                gameLoop = setInterval(gameStep, gameSpeed);
+            }
+
+            // Предотвращение движения в противоположную сторону
+            if ((newDx === 1 && dx === -1) || (newDx === -1 && dx === 1) ||
+                (newDy === 1 && dy === -1) || (newDy === -1 && dy === 1)) {
+                return;
+            }
+
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
+
+            dx = newDx;
+            dy = newDy;
+        }
+
+        // Кнопки управления
+        document.getElementById('upBtn').addEventListener('click', () => changeDirection(0, -1));
+        document.getElementById('downBtn').addEventListener('click', () => changeDirection(0, 1));
+        document.getElementById('leftBtn').addEventListener('click', () => changeDirection(-1, 0));
+        document.getElementById('rightBtn').addEventListener('click', () => changeDirection(1, 0));
+
+        // Управление клавиатурой
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    changeDirection(0, -1);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    e.preventDefault();
+                    changeDirection(0, 1);
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    changeDirection(-1, 0);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    e.preventDefault();
+                    changeDirection(1, 0);
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    togglePause();
+                    break;
+            }
+        });
+
+        // Свайпы
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, false);
+
+        canvas.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            touchEndY = e.changedTouches[0].screenY;
+            handleSwipe();
+        }, false);
+
+        function handleSwipe() {
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            const minSwipeDistance = 30;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (Math.abs(diffX) > minSwipeDistance) {
+                    if (diffX > 0) {
+                        changeDirection(1, 0); // Вправо
+                    } else {
+                        changeDirection(-1, 0); // Влево
+                    }
+                }
+            } else {
+                if (Math.abs(diffY) > minSwipeDistance) {
+                    if (diffY > 0) {
+                        changeDirection(0, 1); // Вниз
+                    } else {
+                        changeDirection(0, -1); // Вверх
+                    }
+                }
+            }
+        }
+
+        // Пауза
+        function togglePause() {
+            if (!gameStarted) return;
+            
+            isPaused = !isPaused;
+            document.getElementById('pauseOverlay').style.display = isPaused ? 'flex' : 'none';
+            
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+        }
+
+        // Вспомогательная функция для изменения цвета
+        function adjustColor(color, amount) {
+            return '#' + color.replace(/^#/, '').replace(/../g, color => 
+                ('0' + Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2)
+            );
+        }
+
+        // Инициализация
+        generateFood();
+        draw();
+
+        // Адаптация под размер экрана
+        function resizeCanvas() {
+            const container = document.querySelector('.game-container');
+            const maxSize = Math.min(window.innerWidth - 40, 500);
+            canvas.style.width = maxSize + 'px';
+            canvas.style.height = maxSize + 'px';
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+    </script>
+</body>
+</html>
